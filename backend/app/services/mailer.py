@@ -11,6 +11,7 @@ from typing import Optional, List
 import logging
 from email.mime.base import MIMEBase
 from email import encoders
+import socket
 
 
 logger = logging.getLogger(__name__)
@@ -91,14 +92,16 @@ def send_mail(
         # Connect to SMTP server
         if settings.SMTP_USER:
             # Use STARTTLS if credentials provided
-            server = smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT, timeout=10)
+            smtp_host = socket.gethostbyname(settings.SMTP_HOST)
+            server = smtplib.SMTP(smtp_host, settings.SMTP_PORT, timeout=10)
             server.ehlo()
             server.starttls()
             server.ehlo()
             server.login(settings.SMTP_USER, settings.SMTP_PASS)
         else:
             # No authentication (for Mailhog)
-            server = smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT)
+            smtp_host = socket.gethostbyname(settings.SMTP_HOST)
+            server = smtplib.SMTP(smtp_host, settings.SMTP_PORT)
 
         # Prepare all recipients (To + CC + BCC)
         all_recipients = [to_email]
