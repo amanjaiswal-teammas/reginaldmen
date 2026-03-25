@@ -91,8 +91,10 @@ def send_mail(
         # Connect to SMTP server
         if settings.SMTP_USER:
             # Use STARTTLS if credentials provided
-            server = smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT)
+            server = smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT, timeout=10)
+            server.ehlo()
             server.starttls()
+            server.ehlo()
             server.login(settings.SMTP_USER, settings.SMTP_PASS)
         else:
             # No authentication (for Mailhog)
