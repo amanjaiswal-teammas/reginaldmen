@@ -89,26 +89,29 @@ def send_mail(
                 msg.attach(part)
         
         # Connect to SMTP server
-        if settings.SMTP_USER:
-            # Use STARTTLS if credentials provided
-            server = smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT)
-            server.starttls()
-            server.login(settings.SMTP_USER, settings.SMTP_PASS)
-        else:
-            # No authentication (for Mailhog)
-            server = smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT)
-        
-        # Prepare all recipients (To + CC + BCC)
         all_recipients = [to_email]
         if cc_emails:
             all_recipients.extend(cc_emails)
         if bcc_emails:
             all_recipients.extend(bcc_emails)
-        
-        # Send email
+
+        # Convert message to string
         text = msg.as_string()
-        server.sendmail(settings.SMTP_FROM, all_recipients, text)
-        server.quit()
+
+        # Connect to SMTP server
+        if settings.SMTP_USER:
+            server = smtplib.SMTP_SSL(settings.SMTP_HOST, settings.SMTP_PORT, timeout=30)
+            try:
+                server.login(settings.SMTP_USER, settings.SMTP_PASS)
+                server.sendmail(settings.SMTP_FROM, all_recipients, text)
+            finally:
+                server.quit()
+        else:
+            server = smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT)
+            try:
+                server.sendmail(settings.SMTP_FROM, all_recipients, text)
+            finally:
+                server.quit()
         
         logger.info(f"Email sent successfully to {to_email} (CC: {cc_emails}, BCC: {bcc_emails})")
         return message_id.strip('<>')  # Remove angle brackets
