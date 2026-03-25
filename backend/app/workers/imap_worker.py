@@ -139,7 +139,7 @@ class IMAPWorker:
                 logger.warning("IMAP credentials not configured, skipping connection")
                 return False
 
-            self.imap_client = IMAPClient(settings.IMAP_HOST, use_uid=True, ssl=True)
+            self.imap_client = IMAPClient(settings.IMAP_HOST, use_uid=True, ssl=True, timeout=30)
             self.imap_client.login(settings.IMAP_USER, settings.IMAP_PASS)
             self.imap_client.select_folder('INBOX')
             logger.info("Connected to IMAP server")
@@ -609,17 +609,42 @@ class IMAPScheduler:
             yesterday = datetime.now() - timedelta(days=1)
             date_str = yesterday.strftime("%d-%b-%Y")
             messages = self.worker.imap_client.search(f'SINCE {date_str}')
+            messages = messages[-50:]
 
             logger.info(f"📩 {len(messages)} emails found since {date_str}")
 
-            for msg_id in messages:
-                try:
-                    email_data = self.worker.imap_client.fetch([msg_id], ['RFC822'])
-                    if email_data and msg_id in email_data:
-                        full_email = email_data[msg_id][b'RFC822']
-                        self.worker.process_email({'RFC822': full_email}, str(msg_id))
-                except Exception as e:
-                    logger.error(f"❗ Error with email {msg_id} → {e}")
+            for i, msg_id in enumerate(messages):
+
+                for attempt in range(3):
+                    try:
+                        email_data = self.worker.imap_client.fetch([msg_id], ['RFC822'])
+
+                        if email_data and msg_id in email_data:
+                            full_email = email_data[msg_id][b'RFC822']
+                            self.worker.process_email({'RFC822': full_email}, str(msg_id))
+
+                        break  # success → exit retry loop
+
+                    except Exception as e:
+                        logger.error(f"❗ Error with email {msg_id} → {e}")
+
+                        if "EOF occurred" in str(e):
+                            logger.warning("🔄 Reconnecting IMAP due to EOF...")
+
+                            try:
+                                self.worker.imap_client.logout()
+                            except:
+                                pass
+
+                            time.sleep(2)
+
+                            if not self.worker.connect_imap():
+                                break
+                        else:
+                            break
+
+                # 🔥 throttle (VERY IMPORTANT)
+                time.sleep(0.1)
 
         except Exception as e:
             logger.error(f"⚠ Scheduler run failed → {e}")
@@ -642,7 +667,8 @@ def start_scheduler():
         "interval",
         minutes=2,
         id="imap_email_fetcher",
-        replace_existing=True
+        replace_existing=True,
+        max_instances=1
     )
 
     logger.info("🚀 IMAP Email Scheduler Started")
