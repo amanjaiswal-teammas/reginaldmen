@@ -241,16 +241,21 @@ async def list_tickets(
         search = search.strip()
         search_filter = f"%{search}%"
 
-        query = query.outerjoin(
-            TicketMessage,
-            TicketMessage.ticket_id == Ticket.id
-        ).filter(
+        # Subquery to get matching ticket_ids from messages
+        message_ticket_ids = (
+            db.query(TicketMessage.ticket_id)
+            .filter(TicketMessage.body.ilike(search_filter))
+            .subquery()
+        )
+
+        # Apply search without JOIN
+        query = query.filter(
             or_(
                 Ticket.subject.ilike(search_filter),
                 Ticket.customer_email.ilike(search_filter),
-                TicketMessage.body.ilike(search_filter)
+                Ticket.id.in_(message_ticket_ids)
             )
-        ).distinct()
+        )
 
     if from_date:
         from_dt = datetime.strptime(from_date, "%Y-%m-%d")
