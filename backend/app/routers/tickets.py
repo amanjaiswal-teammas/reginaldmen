@@ -241,21 +241,28 @@ async def list_tickets(
         search = search.strip()
         search_filter = f"%{search}%"
 
-        # Subquery to get matching ticket_ids from messages
-        message_ticket_ids = (
-            db.query(TicketMessage.ticket_id)
-            .filter(TicketMessage.body.ilike(search_filter))
-            .subquery()
-        )
+        # Search by customer_email (FAST - indexed)
+        email_query = query.filter(Ticket.customer_email.ilike(search_filter))
+        email_exists = email_query.first()
 
-        # Apply search without JOIN
-        query = query.filter(
-            or_(
-                Ticket.subject.ilike(search_filter),
-                Ticket.customer_email.ilike(search_filter),
-                Ticket.id.in_(message_ticket_ids)
-            )
-        )
+        if email_exists:
+            query = email_query
+        else:
+            # Search by subject (MEDIUM)
+            subject_query = query.filter(Ticket.subject.ilike(search_filter))
+            subject_exists = subject_query.first()
+
+            if subject_exists:
+                query = subject_query
+            else:
+                # Search in message body (SLOW - only if needed)
+                message_ticket_ids = (
+                    db.query(TicketMessage.ticket_id)
+                    .filter(TicketMessage.body.ilike(search_filter))
+                    .subquery()
+                )
+
+                query = query.filter(Ticket.id.in_(message_ticket_ids))
 
     if from_date:
         from_dt = datetime.strptime(from_date, "%Y-%m-%d")
