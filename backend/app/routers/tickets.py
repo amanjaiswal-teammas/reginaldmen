@@ -285,7 +285,7 @@ async def list_tickets(
         )
     
     # Order by updated_at desc (must be before pagination)
-    query = query.order_by(Ticket.updated_at.desc())
+    query = query.order_by(Ticket.updated_at.desc()).limit(10000)
     
     # Get total count
     total = query.count()
