@@ -33,6 +33,7 @@ class User(Base):
     emp_code = Column(String(100), unique=True, index=True, nullable=True)
     role = Column(Enum(Role), nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
+    is_online = Column(Boolean, default=False, nullable=False)
     password_hash = Column(String(255), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
@@ -217,6 +218,21 @@ class TicketFeedback(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     ticket = relationship("Ticket", back_populates="feedback")
+
+
+class TicketEvent(Base):
+    __tablename__ = "ticket_events"
+
+    id = Column(BigInteger, primary_key=True)
+    ticket_id = Column(BigInteger, ForeignKey("tickets.id"), nullable=False)
+
+    event_type = Column(String(50), nullable=False, default="status_change")
+    old_value = Column(String(50), nullable=True)
+    new_value = Column(String(50), nullable=True)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    ticket = relationship("Ticket")
 
 
 # Indexes for performance
