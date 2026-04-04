@@ -507,8 +507,8 @@ async def update_ticket(
     db.refresh(ticket)
 
     # Send feedback if status changed to closed
-    if ticket.status == TicketStatus.Closed and not was_closed:
-        create_and_send_feedback(db, ticket)
+    # if ticket.status == TicketStatus.Closed and not was_closed:
+    #     create_and_send_feedback(db, ticket)
     
     # Reload with relationships
     ticket = db.query(Ticket).options(
@@ -726,8 +726,8 @@ async def reply_to_ticket(
     
     db.commit()
 
-    if reply_data.close_after and not was_closed:
-        create_and_send_feedback(db, ticket)
+    # if reply_data.close_after and not was_closed:
+    #     create_and_send_feedback(db, ticket)
     
     return {"message": "Reply sent successfully", "message_id": message_id}
 
