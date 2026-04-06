@@ -490,47 +490,47 @@ class IMAPWorker:
             self.db.add(message)
 
             # Send auto-ack
-            auto_ack_subject = f"Mail Acknowledgment - Ticket #: [TKT-{ticket.id}]"
-            auto_ack_subject_clean = normalize_subject(auto_ack_subject)
-            auto_ack_body = textwrap.dedent(f"""\
-            Dear ,
-
-            Thank you for contacting us. We have received your mail and it has been logged under Ticket #: TKT-{ticket.id}.
-
-            Our team is currently reviewing the details of your concern. You can expect an initial response within 72 hours (3 days), and we are committed to resolving the matter within 2–5 business days, depending on its complexity.
-
-            If you have any further details to share or would like to follow up, please feel free to reply to this email, quoting your ticket number for reference.
-
-            We appreciate your patience and assure you that your concern is receiving our full attention.
-
-            Warm regards,
-            Molecular
-            Customer Support Team
-            """)
-
-            ack_message_id = send_mail(
-                to_email=from_email,
-                subject=auto_ack_subject,
-                body=auto_ack_body
-            )
-
-            if ack_message_id:
-                # Store auto-ack message
-                ack_message = TicketMessage(
-                    ticket_id=ticket.id,
-                    direction=MsgDir.outbound,
-                    from_email=settings.SMTP_FROM,
-                    to_email=from_email,
-                    subject=auto_ack_subject_clean,
-                    body=auto_ack_body,
-                    smtp_message_id=ack_message_id,
-                    sent_at=datetime.utcnow(),
-                    attachments_json=json.dumps([])
-                )
-                self.db.add(ack_message)
-                logger.info(f"Auto-ack sent for ticket {ticket.id}")
-            else:
-                logger.error(f"Failed to send auto-ack for ticket {ticket.id}")
+            # auto_ack_subject = f"Mail Acknowledgment - Ticket #: [TKT-{ticket.id}]"
+            # auto_ack_subject_clean = normalize_subject(auto_ack_subject)
+            # auto_ack_body = textwrap.dedent(f"""\
+            # Dear ,
+            #
+            # Thank you for contacting us. We have received your mail and it has been logged under Ticket #: TKT-{ticket.id}.
+            #
+            # Our team is currently reviewing the details of your concern. You can expect an initial response within 72 hours (3 days), and we are committed to resolving the matter within 2–5 business days, depending on its complexity.
+            #
+            # If you have any further details to share or would like to follow up, please feel free to reply to this email, quoting your ticket number for reference.
+            #
+            # We appreciate your patience and assure you that your concern is receiving our full attention.
+            #
+            # Warm regards,
+            # Molecular
+            # Customer Support Team
+            # """)
+            #
+            # ack_message_id = send_mail(
+            #     to_email=from_email,
+            #     subject=auto_ack_subject,
+            #     body=auto_ack_body
+            # )
+            #
+            # if ack_message_id:
+            #     # Store auto-ack message
+            #     ack_message = TicketMessage(
+            #         ticket_id=ticket.id,
+            #         direction=MsgDir.outbound,
+            #         from_email=settings.SMTP_FROM,
+            #         to_email=from_email,
+            #         subject=auto_ack_subject_clean,
+            #         body=auto_ack_body,
+            #         smtp_message_id=ack_message_id,
+            #         sent_at=datetime.utcnow(),
+            #         attachments_json=json.dumps([])
+            #     )
+            #     self.db.add(ack_message)
+            #     logger.info(f"Auto-ack sent for ticket {ticket.id}")
+            # else:
+            #     logger.error(f"Failed to send auto-ack for ticket {ticket.id}")
 
             # Mark as processed
             ingest.status = 'processed'
