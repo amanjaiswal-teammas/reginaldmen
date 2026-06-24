@@ -95,6 +95,88 @@ async def export_tickets_csv(
     )
 
 
+@router.get("/tickets/updated/csv")
+async def export_updated_tickets_csv(
+        status: Optional[str] = Query(None),
+        assigned_to: Optional[int] = Query(None),
+        priority_id: Optional[int] = Query(None),
+        from_date: Optional[str] = Query(None),
+        to_date: Optional[str] = Query(None),
+        db: Session = Depends(get_db),
+        current_user: User = Depends(require_admin)
+):
+    """Export tickets to CSV format"""
+
+    query = db.query(Ticket).options(
+        joinedload(Ticket.assigned_user),
+        joinedload(Ticket.language),
+        joinedload(Ticket.voc),
+        joinedload(Ticket.priority)
+    )
+
+    # Apply filters
+    if status:
+        query = query.filter(Ticket.status == status)
+    if assigned_to:
+        query = query.filter(Ticket.assigned_to == assigned_to)
+    if priority_id:
+        query = query.filter(Ticket.priority_id == priority_id)
+    if from_date:
+        query = query.filter(Ticket.updated_at >= from_date)
+    if to_date:
+        query = query.filter(Ticket.updated_at <= to_date)
+
+    query = query.order_by(Ticket.updated_at.desc())
+    tickets = query.all()
+
+    # Create CSV in memory
+    output = io.StringIO()
+    writer = csv.writer(output)
+
+    # Write header
+    writer.writerow([
+        'Ticket ID',
+        'Customer Email',
+        'Customer Name',
+        'Subject',
+        'Status',
+        'Assigned To',
+        'Language',
+        'VOC',
+        'Priority',
+        'Created At',
+        'Updated At'
+    ])
+
+    # Write data
+    for ticket in tickets:
+        writer.writerow([
+            ticket.id,
+            ticket.customer_email,
+            ticket.customer_name or '',
+            ticket.subject,
+            ticket.status.value,
+            ticket.assigned_user.name if ticket.assigned_user else '',
+            ticket.language.name if ticket.language else '',
+            ticket.voc.name if ticket.voc else '',
+            ticket.priority.name if ticket.priority else '',
+            ticket.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+            ticket.updated_at.strftime('%Y-%m-%d %H:%M:%S')
+        ])
+
+    output.seek(0)
+
+    # Generate filename with timestamp
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    filename = f"tickets_updated_export_{timestamp}.csv"
+
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+
 @router.get("/emails/csv")
 async def export_emails_csv(
     spam_status: Optional[str] = Query(None, description="spam, not_spam, or all"),

@@ -1,5 +1,5 @@
 import json
-from fastapi import APIRouter, Depends, HTTPException, status, Query, File, UploadFile, Form
+from fastapi import APIRouter, Depends, HTTPException, status, Query, File, UploadFile, Form, Header
 from sqlalchemy.orm import Session, joinedload
 from pydantic import BaseModel
 from typing import List, Optional
@@ -10,7 +10,7 @@ from ..db import get_db
 from ..deps import get_current_user, require_admin, require_role
 from ..models import (
     Ticket, TicketMessage, User, Role, TicketStatus, MsgDir,
-    CategoryLanguage, CategoryVOC, CategoryPriority, EmailTemplate, TicketEvent
+    CategoryLanguage, CategoryVOC, CategoryPriority, EmailTemplate, TicketEvent, ChannelType, ExternalFeedback
 )
 from ..services.mailer import send_mail
 from ..utils import get_pagination_params, apply_pagination
@@ -18,6 +18,7 @@ from ..workers.attachment_handler import AttachmentHandler
 from ..config import settings
 from sqlalchemy import or_, and_
 from ..services.feedback_mailer import create_and_send_feedback
+import textwrap
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -303,7 +304,7 @@ async def list_tickets(
         query = query.order_by(Ticket.updated_at.desc())
 
     # Performance cap
-    query = query.limit(10000)
+    query = query.limit(3000)
     
     # Get total count
     total = query.count()
@@ -762,3 +763,169 @@ async def reassign_ticket(
     db.refresh(ticket)
     
     return {"message": "Ticket reassigned successfully"}
+
+
+
+class FeedbackWebhookPayload(BaseModel):
+    country_code: str
+    email: str
+    name: Optional[str] = None
+    remarks: Optional[str] = None
+    sr_number: Optional[str] = None
+    mobile_number: Optional[str] = None
+    passport_number: Optional[str] = None
+    data_type: str
+
+    class Config:
+        populate_by_name = True
+
+
+@router.post("/webhook/feedback")
+async def feedback_webhook(
+    payload: FeedbackWebhookPayload,
+    db: Session = Depends(get_db),
+    authorization: Optional[str] = Header(None)
+):
+    """
+        Secured webhook endpoint
+        Requires:
+        Authorization: Bearer <TOKEN>
+        """
+
+    # AUTH VALIDATION
+    if not authorization:
+        raise HTTPException(
+            status_code=401,
+            detail="Authorization header missing"
+        )
+
+    expected_token = f"Bearer {settings.WEBHOOK_AUTH_TOKEN}"
+
+    if authorization != expected_token:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid auth token"
+        )
+
+    try:
+
+        # STEP 1: Save webhook payload
+        feedback = ExternalFeedback(
+            country_code=payload.country_code,
+            email=payload.email,
+            name=payload.name,
+            remarks=payload.remarks,
+            sr_number=payload.sr_number,
+            mobile_number=payload.mobile_number,
+            passport_number=payload.passport_number,
+            data_type=payload.data_type,
+            ticket_created=0
+        )
+
+        db.add(feedback)
+        db.flush()
+
+        # STEP 2: Create Ticket
+        ticket = Ticket(
+            customer_email=payload.email,
+            customer_name=payload.name,
+            subject=payload.data_type,
+            status=TicketStatus.Open,
+            channel=ChannelType.email
+        )
+
+        db.add(ticket)
+        db.flush()
+
+        # STEP 3: Create Ticket Message
+        body = f"""
+Country Code: {payload.country_code}
+
+Email: {payload.email}
+
+Name: {payload.name}
+
+Remarks: {payload.remarks}
+
+SR Number: {payload.sr_number}
+
+Mobile Number: {payload.mobile_number}
+
+Passport Number: {payload.passport_number}
+
+Data Type: {payload.data_type}
+"""
+
+        message = TicketMessage(
+            ticket_id=ticket.id,
+            direction=MsgDir.inbound,
+            from_email=payload.email,
+            to_email=settings.SMTP_FROM,
+            subject=payload.data_type,
+            body=body
+        )
+
+        db.add(message)
+
+        # STEP 4: Update tracking fields
+        feedback.ticket_created = 1
+        feedback.ticket_id = ticket.id
+
+        # Auto Acknowledgement Mail
+        auto_ack_subject = f"Mail Acknowledgment - Ticket #: [TKT-{ticket.id}]"
+
+        auto_ack_body = textwrap.dedent(f"""\
+        Dear Applicant,
+
+        Thank you for contacting us. Your Ticket ID is Ticket #: TKT-{ticket.id}.
+
+        We apologize for the inconvenience. Your request has been forwarded to the concerned team for priority review. We will update you within 24–48 working hours.
+
+        Warm regards,
+        ICAC Service Team
+        """)
+
+        ack_message_id = send_mail(
+            to_email=payload.email,
+            subject=auto_ack_subject,
+            body=auto_ack_body
+        )
+
+        if ack_message_id:
+            ack_message = TicketMessage(
+                ticket_id=ticket.id,
+                direction=MsgDir.outbound,
+                from_email=settings.SMTP_FROM,
+                to_email=payload.email,
+                subject=auto_ack_subject,
+                body=auto_ack_body,
+                smtp_message_id=ack_message_id,
+                sent_at=datetime.utcnow(),
+                attachments_json=json.dumps([])
+            )
+
+            db.add(ack_message)
+
+            logger.info(
+                f"Auto acknowledgement sent for ticket {ticket.id}"
+            )
+        else:
+            logger.error(
+                f"Failed to send auto acknowledgement for ticket {ticket.id}"
+            )
+
+        db.commit()
+
+        return {
+            "success": True,
+            "feedback_id": feedback.id,
+            "ticket_id": ticket.id,
+            "message": "Webhook processed successfully"
+        }
+
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=str(e)
+        )

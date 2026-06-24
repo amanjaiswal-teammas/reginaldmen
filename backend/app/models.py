@@ -235,6 +235,31 @@ class TicketEvent(Base):
     ticket = relationship("Ticket")
 
 
+class ExternalFeedback(Base):
+    __tablename__ = "external_feedback"
+
+    id = Column(BigInteger, primary_key=True, index=True)
+
+    country_code = Column(String(10))
+    email = Column(String(255), nullable=False, index=True)
+    name = Column(String(255))
+    remarks = Column(Text)
+    sr_number = Column(String(100), index=True)
+    mobile_number = Column(String(20))
+    passport_number = Column(String(100))
+    data_type = Column(String(255))
+
+    # Track ticket creation
+    ticket_created = Column(Integer, default=0)   # 0 = No, 1 = Yes
+    ticket_id = Column(BigInteger, ForeignKey("tickets.id"), nullable=True)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # Optional relationship
+    ticket = relationship("Ticket")
+
+
+
 # Indexes for performance
 Index('idx_tickets_status_assigned_priority_updated', 'status', 'assigned_to', 'priority_id', 'updated_at')
 Index('idx_ticket_messages_ticket_id', 'ticket_id')

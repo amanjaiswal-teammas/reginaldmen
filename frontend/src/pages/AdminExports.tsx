@@ -104,6 +104,49 @@ const AdminExports: React.FC = () => {
     }
   }
 
+
+  const handleExportUpdatedTickets = async () => {
+      setIsExporting('updated_tickets')
+      setError('')
+      setSuccess('')
+
+      try {
+        const params = new URLSearchParams()
+        if (ticketFilters.status) params.append('status', ticketFilters.status)
+        if (ticketFilters.assigned_to) params.append('assigned_to', ticketFilters.assigned_to)
+        if (ticketFilters.priority_id) params.append('priority_id', ticketFilters.priority_id)
+        if (ticketFilters.from_date) params.append('from_date', ticketFilters.from_date)
+        if (ticketFilters.to_date) params.append('to_date', ticketFilters.to_date)
+
+        const url = `${API_BASE_URL}/exports/tickets/updated/csv?${params.toString()}`
+
+        const response = await fetch(url, {
+          headers: getAuthHeaders()
+        })
+
+        if (!response.ok) {
+          throw new Error('Failed to export updated tickets')
+        }
+
+        const blob = await response.blob()
+        const downloadUrl = window.URL.createObjectURL(blob)
+
+        const link = document.createElement('a')
+        link.href = downloadUrl
+        link.download = `tickets_updated_${new Date().getTime()}.csv`
+        document.body.appendChild(link)
+        link.click()
+        link.remove()
+        window.URL.revokeObjectURL(downloadUrl)
+
+        setSuccess('Updated tickets exported successfully!')
+      } catch (err: any) {
+        setError(err.message || 'Failed to export updated tickets')
+      } finally {
+        setIsExporting(null)
+      }
+  }
+
   const handleExportEmails = async () => {
     setIsExporting('emails')
     setError('')
@@ -437,6 +480,115 @@ const AdminExports: React.FC = () => {
             </>
           )}
         </button>
+      </div>
+
+
+
+      {/* Export Updated Tickets */}
+      <div className="bg-white shadow rounded-lg p-6">
+          <div className="flex items-center mb-4">
+            <svg className="w-6 h-6 text-orange-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <h2 className="text-lg font-semibold text-gray-900">
+              Export Updated Tickets
+            </h2>
+          </div>
+
+          <p className="text-sm text-gray-600 mb-4">
+            Export tickets based on last updated date (updated_at).
+          </p>
+
+          {/* Reuse same filters */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
+              <select
+                value={ticketFilters.status}
+                onChange={(e) => setTicketFilters({...ticketFilters, status: e.target.value})}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+              >
+                <option value="">All Statuses</option>
+                <option value="Open">Open</option>
+                <option value="Pending">Pending</option>
+                <option value="Closed">Closed</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Assigned To</label>
+              <select
+                value={ticketFilters.assigned_to}
+                onChange={(e) => setTicketFilters({...ticketFilters, assigned_to: e.target.value})}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+              >
+                <option value="">All Agents</option>
+                {advisers.map((adviser) => (
+                  <option key={adviser.id} value={adviser.id}>
+                    {adviser.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Priority</label>
+              <select
+                value={ticketFilters.priority_id}
+                onChange={(e) => setTicketFilters({...ticketFilters, priority_id: e.target.value})}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+              >
+                <option value="">All Priorities</option>
+                {priorities.map((priority) => (
+                  <option key={priority.id} value={priority.id}>
+                    {priority.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">From Date</label>
+              <input
+                type="date"
+                value={ticketFilters.from_date}
+                onChange={(e) => setTicketFilters({...ticketFilters, from_date: e.target.value})}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">To Date</label>
+              <input
+                type="date"
+                value={ticketFilters.to_date}
+                onChange={(e) => setTicketFilters({...ticketFilters, to_date: e.target.value})}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+              />
+            </div>
+          </div>
+
+          <button
+            onClick={handleExportUpdatedTickets}
+            disabled={isExporting === 'updated_tickets'}
+            className="px-6 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 disabled:opacity-50 flex items-center"
+          >
+            {isExporting === 'updated_tickets' ? (
+              <>
+                <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                  <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                </svg>
+                Exporting...
+              </>
+            ) : (
+              <>
+                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+                Export Updated Tickets
+              </>
+            )}
+          </button>
       </div>
 
 
