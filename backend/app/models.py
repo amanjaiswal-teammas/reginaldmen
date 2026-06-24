@@ -182,6 +182,7 @@ class BulkEmail(Base):
 
     id = Column(BigInteger, primary_key=True, index=True)
     email = Column(String(255), nullable=False, index=True)
+    subject = Column(String(500), nullable=False)
     content = Column(Text(length=4294967295), nullable=False)
     status = Column(Integer, default=0, nullable=False)
     response = Column(Text(length=4294967295), nullable=True)

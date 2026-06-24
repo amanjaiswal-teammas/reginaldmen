@@ -26,20 +26,32 @@ async def upload_bulk_email_file(file: UploadFile = File(...), db: Session = Dep
 
     df.columns = df.columns.str.lower()
 
-    if "email" not in df.columns or "content" not in df.columns:
-        raise HTTPException(status_code=400, detail="Excel must contain columns: email, content")
+    required_columns = ["email", "subject", "content"]
+
+    for col in required_columns:
+        if col not in df.columns:
+            raise HTTPException(
+                status_code=400,
+                detail="Excel must contain columns: email, subject, content"
+            )
 
     count = 0
     for _, row in df.iterrows():
-        if pd.isna(row["email"]) or pd.isna(row["content"]):
+        if (
+                pd.isna(row["email"])
+                or pd.isna(row["subject"])
+                or pd.isna(row["content"])
+        ):
             continue
 
         entry = BulkEmail(
             email=row["email"],
+            subject=row["subject"],
             content=row["content"],
             status=BulkEmailStatus.pending,
             created_at=datetime.utcnow()
         )
+
         db.add(entry)
         count += 1
 
@@ -54,7 +66,13 @@ async def upload_bulk_email_file(file: UploadFile = File(...), db: Session = Dep
 async def download_bulk_email_excel(db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
     emails = db.query(BulkEmail).all()
 
-    df = pd.DataFrame([ [e.email, e.content] for e in emails ], columns=["Email", "Content"])
+    df = pd.DataFrame(
+        [
+            [e.email, e.subject, e.content]
+            for e in emails
+        ],
+        columns=["Email", "Subject", "Content"]
+    )
     # 👆 Column headings defined clearly
 
     stream = io.BytesIO()
@@ -85,7 +103,7 @@ async def bulk_send_all(db: Session = Depends(get_db), current_user=Depends(requ
         try:
             message_id = send_mail(
                 to_email=record.email,
-                subject="Bulk Mail Delivery",
+                subject=record.subject,
                 body=record.content,
                 attachments=None
             )

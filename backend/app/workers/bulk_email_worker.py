@@ -23,7 +23,7 @@ def send_pending_bulk_emails():
         try:
             message_id = send_mail(
                 to_email=record.email,
-                subject="Bulk Mail Delivery",
+                subject=record.subject,
                 body=record.content,
                 attachments=None
             )
