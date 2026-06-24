@@ -189,7 +189,7 @@ async def export_emails_csv(
     
     # Get all ticket messages
     query = db.query(TicketMessage).options(
-        joinedload(TicketMessage.ticket),
+        joinedload(TicketMessage.ticket).joinedload(Ticket.voc),
         joinedload(TicketMessage.created_user)
     )
     
@@ -214,6 +214,7 @@ async def export_emails_csv(
     writer.writerow([
         'Message ID',
         'Ticket ID',
+        'Ticket VOC',
         'Direction',
         'From Email',
         'To Email',
@@ -244,6 +245,7 @@ async def export_emails_csv(
         writer.writerow([
             message.id,
             message.ticket_id,
+            message.ticket.voc.name if message.ticket and message.ticket.voc else '',
             message.direction.value,
             message.from_email,
             message.to_email,
